@@ -1,3 +1,8 @@
+// 1. Доработать программу из практической части так, чтобы при отправке ей сигнала SIGUSR1
+// она увеличивала глубину поиска на 2.
+// 2. Добавить общий таймаут на выполнение следующих операций: работа парсера, получений ссылок со страницы,
+// формирование заголовка.
+
 package main
 
 import (
@@ -8,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -150,7 +156,7 @@ func (c *crawler) ChanResult() <-chan CrawlResult {
 
 //Config - структура для конфигурации
 type Config struct {
-	MaxDepth   int
+	MaxDepth   uint64
 	MaxResults int
 	MaxErrors  int
 	Url        string
@@ -172,18 +178,27 @@ func main() {
 	r = NewRequester(time.Duration(cfg.Timeout) * time.Second)
 	cr = NewCrawler(r)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	go cr.Scan(ctx, cfg.Url, cfg.MaxDepth) //Запускаем краулер в отдельной рутине
-	go processResult(ctx, cancel, cr, cfg) //Обрабатываем результаты в отдельной рутине
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Timeout)*time.Second)
+	go cr.Scan(ctx, cfg.Url, int(cfg.MaxDepth)) //Запускаем краулер в отдельной рутине
+	go processResult(ctx, cancel, cr, cfg)      //Обрабатываем результаты в отдельной рутине
 
-	sigCh := make(chan os.Signal)        //Создаем канал для приема сигналов
-	signal.Notify(sigCh, syscall.SIGINT) //Подписываемся на сигнал SIGINT
+	sigCh := make(chan os.Signal)                         //Создаем канал для приема сигналов
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGUSR1) //Подписываемся на сигнал SIGINT, SIGUSR1
 	for {
 		select {
 		case <-ctx.Done(): //Если всё завершили - выходим
 			return
-		case <-sigCh:
-			cancel() //Если пришёл сигнал SigInt - завершаем контекст
+		case sig := <-sigCh:
+			switch sig {
+			case syscall.SIGINT:
+				cancel() //Если пришёл сигнал SigInt - завершаем контекст
+				return
+			case syscall.SIGUSR1:
+				depth := uint64(2)
+				// Increment depth while catch SIGUSR1
+				atomic.AddUint64(&cfg.MaxDepth, depth)
+				log.Printf("Depth increment set to: %d\n", depth)
+			}
 		}
 	}
 }
