@@ -100,26 +100,29 @@ func (r requester) Get(ctx context.Context, url string) (Page, error) {
 type Crawler interface {
 	Scan(ctx context.Context, url string, depth int)
 	ChanResult() <-chan CrawlResult
+	IncreaseMaxDepth(depth uint64)
 }
 
 type crawler struct {
-	r       Requester
-	res     chan CrawlResult
-	visited map[string]struct{}
-	mu      sync.RWMutex
+	r        Requester
+	res      chan CrawlResult
+	visited  map[string]struct{}
+	mu       sync.RWMutex
+	maxDepth uint64
 }
 
-func NewCrawler(r Requester) *crawler {
+func NewCrawler(r Requester, maxDepth uint64) *crawler {
 	return &crawler{
-		r:       r,
-		res:     make(chan CrawlResult),
-		visited: make(map[string]struct{}),
-		mu:      sync.RWMutex{},
+		r:        r,
+		res:      make(chan CrawlResult),
+		visited:  make(map[string]struct{}),
+		mu:       sync.RWMutex{},
+		maxDepth: maxDepth,
 	}
 }
 
 func (c *crawler) Scan(ctx context.Context, url string, depth int) {
-	if depth <= 0 { //Проверяем то, что есть запас по глубине
+	if int(c.maxDepth) == depth { //Проверяем то, что есть запас по глубине
 		return
 	}
 	c.mu.RLock()
@@ -145,13 +148,17 @@ func (c *crawler) Scan(ctx context.Context, url string, depth int) {
 			Url:   url,
 		}
 		for _, link := range page.GetLinks() {
-			go c.Scan(ctx, link, depth-1) //На все полученные ссылки запускаем новую рутину сборки
+			go c.Scan(ctx, link, depth+1) //На все полученные ссылки запускаем новую рутину сборки
 		}
 	}
 }
 
 func (c *crawler) ChanResult() <-chan CrawlResult {
 	return c.res
+}
+
+func (c *crawler) IncreaseMaxDepth(depth uint64) {
+	atomic.AddUint64(&c.maxDepth, depth)
 }
 
 //Config - структура для конфигурации
@@ -176,11 +183,11 @@ func main() {
 	var r Requester
 
 	r = NewRequester(time.Duration(cfg.Timeout) * time.Second)
-	cr = NewCrawler(r)
+	cr = NewCrawler(r, cfg.MaxDepth)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Timeout)*time.Second)
-	go cr.Scan(ctx, cfg.Url, int(cfg.MaxDepth)) //Запускаем краулер в отдельной рутине
-	go processResult(ctx, cancel, cr, cfg)      //Обрабатываем результаты в отдельной рутине
+	go cr.Scan(ctx, cfg.Url, 1)            //Запускаем краулер в отдельной рутине
+	go processResult(ctx, cancel, cr, cfg) //Обрабатываем результаты в отдельной рутине
 
 	sigCh := make(chan os.Signal)                         //Создаем канал для приема сигналов
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGUSR1) //Подписываемся на сигнал SIGINT, SIGUSR1
@@ -196,7 +203,7 @@ func main() {
 			case syscall.SIGUSR1:
 				depth := uint64(2)
 				// Increment depth while catch SIGUSR1
-				atomic.AddUint64(&cfg.MaxDepth, depth)
+				cr.IncreaseMaxDepth(depth)
 				log.Printf("Depth increment set to: %d\n", depth)
 			}
 		}
