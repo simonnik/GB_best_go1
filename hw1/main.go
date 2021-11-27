@@ -19,7 +19,7 @@ import (
 
 func main() {
 	cfg := config.NewConfig()
-	r := crw.NewRequester(time.Duration(cfg.Timeout) * time.Second)
+	r := crw.NewRequester(crw.NewHttpClient(time.Duration(cfg.Timeout) * time.Second))
 	cr := crw.NewCrawler(r, cfg.MaxDepth)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Timeout)*time.Second)
 	go cr.Scan(ctx, cfg.Url, 1)             //Запускаем краулер в отдельной рутине

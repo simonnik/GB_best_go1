@@ -19,7 +19,7 @@ type Crawler interface {
 
 type crawler struct {
 	r        Requester
-	res      chan CrawlResult
+	Res      chan CrawlResult
 	Visited  map[string]struct{}
 	Mu       sync.RWMutex
 	MaxDepth uint64
@@ -28,7 +28,7 @@ type crawler struct {
 func NewCrawler(r Requester, maxDepth uint64) *crawler {
 	return &crawler{
 		r:        r,
-		res:      make(chan CrawlResult),
+		Res:      make(chan CrawlResult),
 		Visited:  make(map[string]struct{}),
 		Mu:       sync.RWMutex{},
 		MaxDepth: maxDepth,
@@ -43,15 +43,16 @@ type CrawlResult struct {
 
 type Requester interface {
 	Get(ctx context.Context, url string) (Page, error)
-	CreateHttpClient() *HttpClient
 }
 
 type requester struct {
-	Timeout time.Duration
+	cl BaseHttpClient
 }
 
-func NewRequester(timeout time.Duration) requester {
-	return requester{Timeout: timeout}
+func NewRequester(cl BaseHttpClient) requester {
+	return requester{
+		cl: cl,
+	}
 }
 
 func (r requester) Get(ctx context.Context, url string) (Page, error) {
@@ -63,8 +64,7 @@ func (r requester) Get(ctx context.Context, url string) (Page, error) {
 		if err != nil {
 			return nil, err
 		}
-		cl := r.CreateHttpClient()
-		body, err := cl.Do(req)
+		body, err := r.cl.Do(req)
 		if err != nil {
 			return nil, err
 		}
@@ -78,9 +78,9 @@ func (r requester) Get(ctx context.Context, url string) (Page, error) {
 	return nil, nil
 }
 
-func (r requester) CreateHttpClient() *HttpClient {
+func NewHttpClient(timeout time.Duration) *HttpClient {
 	cl := &http.Client{
-		Timeout: r.Timeout,
+		Timeout: timeout,
 	}
 	return &HttpClient{
 		cl: *cl,
@@ -115,13 +115,13 @@ func (c *crawler) Scan(ctx context.Context, url string, depth int) {
 	default:
 		page, err := c.r.Get(ctx, url) //Запрашиваем страницу через Requester
 		if err != nil {
-			c.res <- CrawlResult{Err: err} //Записываем ошибку в канал
+			c.Res <- CrawlResult{Err: err} //Записываем ошибку в канал
 			return
 		}
 		c.Mu.Lock()
 		c.Visited[url] = struct{}{} //Помечаем страницу просмотренной
 		c.Mu.Unlock()
-		c.res <- CrawlResult{ //Отправляем результаты в канал
+		c.Res <- CrawlResult{ //Отправляем результаты в канал
 			Title: page.GetTitle(),
 			Url:   url,
 		}
@@ -132,7 +132,7 @@ func (c *crawler) Scan(ctx context.Context, url string, depth int) {
 }
 
 func (c *crawler) ChanResult() <-chan CrawlResult {
-	return c.res
+	return c.Res
 }
 
 func (c *crawler) IncreaseMaxDepth(depth uint64) {
