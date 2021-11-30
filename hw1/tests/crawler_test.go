@@ -99,7 +99,7 @@ func TestCrawlerChanResult(t *testing.T) {
 	crRes := crw.CrawlResult{
 		Err:   nil,
 		Title: "Test title",
-		Url:   "https://github.com",
+		URL:   "https://github.com",
 	}
 	go func() {
 		cr.Res <- crRes

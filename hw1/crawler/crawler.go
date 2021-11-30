@@ -2,22 +2,23 @@ package crawler
 
 import (
 	"context"
-	"github.com/PuerkitoBio/goquery"
 	"io"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/PuerkitoBio/goquery" // (lint: goimports)
 )
 
-//Crawler - интерфейс (контракт) краулера
+// Crawler - интерфейс (контракт) краулера, (lint: gocritic)
 type Crawler interface {
 	Scan(ctx context.Context, url string, depth int)
 	ChanResult() <-chan CrawlResult
 	IncreaseMaxDepth(depth uint64)
 }
 
-type crawler struct {
+type Struct struct {
 	r        Requester
 	Res      chan CrawlResult
 	Visited  map[string]struct{}
@@ -25,8 +26,8 @@ type crawler struct {
 	MaxDepth uint64
 }
 
-func NewCrawler(r Requester, maxDepth uint64) *crawler {
-	return &crawler{
+func NewCrawler(r Requester, maxDepth uint64) *Struct { // (lint: revive)
+	return &Struct{
 		r:        r,
 		Res:      make(chan CrawlResult),
 		Visited:  make(map[string]struct{}),
@@ -38,24 +39,24 @@ func NewCrawler(r Requester, maxDepth uint64) *crawler {
 type CrawlResult struct {
 	Err   error
 	Title string
-	Url   string
+	URL   string // (lint: revive)
 }
 
 type Requester interface {
 	Get(ctx context.Context, url string) (Page, error)
 }
 
-type requester struct {
-	cl BaseHttpClient
+type RequesterStruct struct {
+	cl BaseHTTPClient
 }
 
-func NewRequester(cl BaseHttpClient) requester {
-	return requester{
+func NewRequester(cl BaseHTTPClient) RequesterStruct { // (lint: revive)
+	return RequesterStruct{
 		cl: cl,
 	}
 }
 
-func (r requester) Get(ctx context.Context, url string) (Page, error) {
+func (r RequesterStruct) Get(ctx context.Context, url string) (Page, error) {
 	select {
 	case <-ctx.Done():
 		return nil, nil
@@ -75,67 +76,67 @@ func (r requester) Get(ctx context.Context, url string) (Page, error) {
 		}
 		return page, nil
 	}
-	return nil, nil
+	// (lint: govet)
 }
 
-func NewHttpClient(timeout time.Duration) *HttpClient {
+func NewHTTPClient(timeout time.Duration) *HTTPClient { // (lint: revive)
 	cl := &http.Client{
 		Timeout: timeout,
 	}
-	return &HttpClient{
+	return &HTTPClient{
 		cl: *cl,
 	}
 }
 
-type BaseHttpClient interface {
+type BaseHTTPClient interface { // (lint: revive)
 	Do(req *http.Request) (*http.Response, error)
 }
 
-type HttpClient struct {
+type HTTPClient struct { // (lint: revive)
 	cl http.Client
 }
 
-func (h HttpClient) Do(req *http.Request) (*http.Response, error) {
+func (h HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	return h.cl.Do(req)
 }
 
-func (c *crawler) Scan(ctx context.Context, url string, depth int) {
-	if int(c.MaxDepth) == depth { //Проверяем то, что есть запас по глубине
+func (c *Struct) Scan(ctx context.Context, url string, depth int) {
+	if int(c.MaxDepth) == depth { // Проверяем то, что есть запас по глубине, (lint: gocritic)
 		return
 	}
 	c.Mu.RLock()
-	_, ok := c.Visited[url] //Проверяем, что мы ещё не смотрели эту страницу
+	_, ok := c.Visited[url] // Проверяем, что мы ещё не смотрели эту страницу, (lint: gocritic)
 	c.Mu.RUnlock()
 	if ok {
 		return
 	}
 	select {
-	case <-ctx.Done(): //Если контекст завершен - прекращаем выполнение
+	case <-ctx.Done(): // Если контекст завершен - прекращаем выполнение, (lint: gocritic)
 		return
 	default:
-		page, err := c.r.Get(ctx, url) //Запрашиваем страницу через Requester
+		page, err := c.r.Get(ctx, url) // Запрашиваем страницу через Requester, (lint: gocritic)
 		if err != nil {
-			c.Res <- CrawlResult{Err: err} //Записываем ошибку в канал
+			c.Res <- CrawlResult{Err: err} // Записываем ошибку в канал, (lint: gocritic)
 			return
 		}
 		c.Mu.Lock()
-		c.Visited[url] = struct{}{} //Помечаем страницу просмотренной
+		c.Visited[url] = struct{}{} // Помечаем страницу просмотренной, (lint: gocritic)
 		c.Mu.Unlock()
-		c.Res <- CrawlResult{ //Отправляем результаты в канал
+		c.Res <- CrawlResult{ // Отправляем результаты в канал, (lint: gocritic)
 			Title: page.GetTitle(),
-			Url:   url,
+			URL:   url,
 		}
 		for _, link := range page.GetLinks() {
-			go c.Scan(ctx, link, depth+1) //На все полученные ссылки запускаем новую рутину сборки
+			go c.Scan(ctx, link, depth+1) // На все полученные ссылки запускаем новую рутину сборки, (lint: gocritic)
 		}
 	}
 }
 
-func (c *crawler) ChanResult() <-chan CrawlResult {
+func (c *Struct) ChanResult() <-chan CrawlResult {
 	return c.Res
 }
 
-func (c *crawler) IncreaseMaxDepth(depth uint64) {
+func (c *Struct) IncreaseMaxDepth(depth uint64) {
 	atomic.AddUint64(&c.MaxDepth, depth)
 }
 

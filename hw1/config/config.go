@@ -4,18 +4,18 @@ import (
 	"flag"
 )
 
-//Config - структура для конфигурации
+// Config - структура для конфигурации, (lint: gocritic)
 type Config struct {
 	MaxDepth   uint64
 	MaxResults int
 	MaxErrors  int
-	Url        string
+	URL        string // (lint:revive)
 	Timeout    int
 }
 
 func NewConfig() *Config {
 	var (
-		url        = flag.String("url", "https://telegram.org", "Url of target source")
+		url        = flag.String("url", "https://telegram.org", "URL of target source")
 		maxDepth   = flag.Uint64("maxDepth", 3, "Max depth for links")
 		maxResults = flag.Int("maxResults", 10, "Max results of links")
 		maxErrors  = flag.Int("maxErrors", 5, "Max errors of results")
@@ -27,7 +27,7 @@ func NewConfig() *Config {
 		MaxDepth:   *maxDepth,
 		MaxResults: *maxResults,
 		MaxErrors:  *maxErrors,
-		Url:        *url,
+		URL:        *url,
 		Timeout:    *timeout,
 	}
 }
