@@ -1,14 +1,16 @@
-package tests
+package crawler_test
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	crw "github.com/t0pep0/GB_best_go1/hw1/crawler"
-	"github.com/t0pep0/GB_best_go1/hw1/crawler/mocks"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/t0pep0/GB_best_go1/hw1/crawler"
+	"github.com/t0pep0/GB_best_go1/hw1/crawler/mocks"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var testPage = `<!DOCTYPE html>
@@ -23,22 +25,22 @@ var testPage = `<!DOCTYPE html>
 			</body>
 		</html>`
 
-func mockNewPage() (crw.Page, error) {
-	return crw.NewPage(ioutil.NopCloser(strings.NewReader(testPage)))
+func mockNewPage() (crawler.Page, error) {
+	return crawler.NewPage(ioutil.NopCloser(strings.NewReader(testPage)))
 }
 
 func mockNewHttpClient() *mocks.BaseHttpClient {
 	return &mocks.BaseHttpClient{}
 }
 func TestNewRequester(t *testing.T) {
-	r := crw.NewRequester(mockNewHttpClient())
+	r := crawler.NewRequester(mockNewHttpClient())
 	assert.NotNil(t, r)
 }
 
 func TestNewCrawler(t *testing.T) {
 	maxDepth := uint64(3)
-	r := crw.NewRequester(mockNewHttpClient())
-	cr := crw.NewCrawler(r, maxDepth)
+	r := crawler.NewRequester(mockNewHttpClient())
+	cr := crawler.NewCrawler(r, maxDepth)
 	assert.NotNil(t, cr)
 	assert.Equal(t, maxDepth, cr.MaxDepth)
 }
@@ -51,7 +53,7 @@ func TestNewPage(t *testing.T) {
 func TestCrawlerScan(t *testing.T) {
 	r := &mocks.Requester{}
 	page := &mocks.Page{}
-	cr := crw.NewCrawler(r, 6)
+	cr := crawler.NewCrawler(r, 6)
 	ctx := context.Background()
 	fetcher := map[string][]string{
 		"https://github.com": {
@@ -95,8 +97,8 @@ func TestCrawlerScan(t *testing.T) {
 
 func TestCrawlerChanResult(t *testing.T) {
 	r := &mocks.Requester{}
-	cr := crw.NewCrawler(r, 1)
-	crRes := crw.CrawlResult{
+	cr := crawler.NewCrawler(r, 1)
+	crRes := crawler.CrawlResult{
 		Err:   nil,
 		Title: "Test title",
 		URL:   "https://github.com",
@@ -111,7 +113,7 @@ func TestCrawlerChanResult(t *testing.T) {
 
 func TestRequesterGet(t *testing.T) {
 	cl := mockNewHttpClient()
-	r := crw.NewRequester(cl)
+	r := crawler.NewRequester(cl)
 	ctx := context.Background()
 	url := "https://github.com"
 	req, _ := http.NewRequest("GET", url, nil)
@@ -131,7 +133,7 @@ func TestRequesterGet(t *testing.T) {
 
 func TestCrawlerIncreaseMaxDepth(t *testing.T) {
 	r := &mocks.Requester{}
-	cr := crw.NewCrawler(r, 2)
+	cr := crawler.NewCrawler(r, 2)
 	chDepth := uint64(6)
 
 	cr.IncreaseMaxDepth(4)
